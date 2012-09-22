@@ -266,6 +266,156 @@ mark_as_advanced(
     ${ICU_PUBLIC_VAR_NS}_LIBRARIES
 )
 
+########## <resource bundle support> ##########
+
+########## Public ##########
+find_program(${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE genrb)
+find_program(${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE pkgdata)
+
+if(NOT ${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE)
+    message(FATAL_ERROR "genrb not found")
+endif(NOT ${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE)
+if(NOT ${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE)
+    message(FATAL_ERROR "pkgdata not found")
+endif(NOT ${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE)
+
+
+#
+# Prototype:
+#   generate_icu_resource_bundle([PACKAGE <name>] [DESTINATION <location>] [pattern or list of files])
+#
+# Arguments:
+#   PACKAGE <name>         : optional, package all resource bundles
+#   DESTINATION <location> : optional, directory where to install final binary file(s)
+#
+
+# TODO:
+# - java support?
+# - library format
+# - static format
+
+function(generate_icu_resource_bundle)
+
+    set(PACKAGE_TARGET_PREFIX "ICU_PKG_")
+    set(RESOURCE_TARGET_PREFIX "ICU_RB_")
+
+    cmake_parse_arguments(PARSED_ARGS "" "PACKAGE;DESTINATION" "" ${ARGN})
+
+    # assert(PARSED_ARGS_UNPARSED_ARGUMENTS > 0)
+    list(LENGTH PARSED_ARGS_UNPARSED_ARGUMENTS PARSED_ARGS_UNPARSED_ARGUMENTS_LEN)
+    if(PARSED_ARGS_UNPARSED_ARGUMENTS_LEN LESS 1)
+        message(FATAL_ERROR "generate_icu_resource_bundle() expects at least 1 resource bundle, 0 given")
+    endif(PARSED_ARGS_UNPARSED_ARGUMENTS_LEN LESS 1)
+
+    if(PARSED_ARGS_PACKAGE)
+        # Package name: strip file extension (".dat") if present
+        get_filename_component(PACKAGE_NAME_WE ${PARSED_ARGS_PACKAGE} NAME_WE)
+        # Target name to build package
+        set(PACKAGE_TARGET_NAME "${PACKAGE_TARGET_PREFIX}${PACKAGE_NAME_WE}")
+        # Target name to build intermediate list file
+        set(PACKAGE_LIST_TARGET_NAME "${PACKAGE_TARGET_NAME}_LIST")
+        # Directory (absolute) to set as "current directory" for genrb (does not include package directory, -p)
+        set(RESOURCE_GENRB_CHDIR_DIR "${CMAKE_PLATFORM_ROOT_BIN}/${PACKAGE_TARGET_NAME}.dir/")
+        # Directory (absolute) where resource bundles are built: concatenation of RESOURCE_GENRB_CHDIR_DIR and package name
+        set(RESOURCE_OUTPUT_DIR "${RESOURCE_GENRB_CHDIR_DIR}/${PACKAGE_NAME_WE}/")
+        # Output (relative) path for built package
+        set(PACKAGE_OUTPUT_PATH "${RESOURCE_GENRB_CHDIR_DIR}/${PACKAGE_NAME_WE}.dat")
+        # Output (absolute) path for the list file
+        set(PACKAGE_LIST_OUTPUT_PATH "${RESOURCE_GENRB_CHDIR_DIR}/pkglist.txt")
+
+        file(MAKE_DIRECTORY "${RESOURCE_OUTPUT_DIR}")
+    else(PARSED_ARGS_PACKAGE)
+        set(RESOURCE_OUTPUT_DIR "")
+        set(RESOURCE_GENRB_CHDIR_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+    endif(PARSED_ARGS_PACKAGE)
+
+    set(TARGET_RESOURCES )
+    set(COMPILED_RESOURCES_PATH )
+    set(COMPILED_RESOURCES_BASENAME "") # Use a whitespace separated string not a semicolon separated list, last one is system dependant (it [echo] will fail on Unix systems)
+    foreach(RESOURCE_SOURCE ${PARSED_ARGS_UNPARSED_ARGUMENTS})
+        get_filename_component(RESOURCE_NAME_WE ${RESOURCE_SOURCE} NAME_WE)
+        set(RESOURCE_TARGET_NAME "${RESOURCE_TARGET_PREFIX}${PACKAGE_NAME_WE}_${RESOURCE_NAME_WE}")
+        get_filename_component(SOURCE_BASENAME ${RESOURCE_SOURCE} NAME)
+        get_filename_component(RELATIVE_SOURCE_DIRECTORY ${RESOURCE_SOURCE} PATH)
+        if(NOT RELATIVE_SOURCE_DIRECTORY)
+            set(RELATIVE_SOURCE_DIRECTORY ".")
+        endif(NOT RELATIVE_SOURCE_DIRECTORY)
+        get_filename_component(ABSOLUTE_SOURCE_DIRECTORY ${RELATIVE_SOURCE_DIRECTORY} ABSOLUTE)
+        file(RELATIVE_PATH SOURCE_DIRECTORY ${RESOURCE_GENRB_CHDIR_DIR} ${ABSOLUTE_SOURCE_DIRECTORY})
+
+        if(NOT PARSED_ARGS_PACKAGE)
+            file(MD5 ${RESOURCE_SOURCE} PACKAGE_NAME_WE)
+        endif(NOT PARSED_ARGS_PACKAGE)
+
+        if(NOT SOURCE_DIRECTORY)
+            set(SOURCE_DIRECTORY ".")
+        endif(NOT SOURCE_DIRECTORY)
+
+        if(PARSED_ARGS_PACKAGE)
+            add_custom_command(
+                OUTPUT "${RESOURCE_OUTPUT_DIR}${RESOURCE_NAME_WE}.res"
+                #COMMAND ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} ${GENRB_ARGS} ${RESOURCE_SOURCE}
+                COMMAND ${CMAKE_COMMAND} -E chdir ${RESOURCE_GENRB_CHDIR_DIR} ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} -d${PACKAGE_NAME_WE} -s${ABSOLUTE_SOURCE_DIRECTORY} ${SOURCE_BASENAME}
+                #COMMAND ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} ${GENRB_ARGS} -s"${SOURCE_DIRECTORY}" ${SOURCE_BASENAME}
+                DEPENDS ${RESOURCE_SOURCE}
+            )
+        else(PARSED_ARGS_PACKAGE)
+            add_custom_command(
+                OUTPUT "${RESOURCE_OUTPUT_DIR}${RESOURCE_NAME_WE}.res"
+                COMMAND ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} ${RESOURCE_SOURCE}
+                #COMMAND ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} -s"${SOURCE_DIRECTORY}" ${SOURCE_BASENAME}
+                DEPENDS ${RESOURCE_SOURCE}
+            )
+        endif(PARSED_ARGS_PACKAGE)
+        add_custom_target(
+            "${RESOURCE_TARGET_NAME}" ALL
+            COMMENT ""
+            DEPENDS "${RESOURCE_OUTPUT_DIR}${RESOURCE_NAME_WE}.res"
+            SOURCES ${RESOURCE_SOURCE}
+        )
+
+        if(PARSED_ARGS_DESTINATION AND NOT PARSED_ARGS_PACKAGE)
+            install(FILES "${RESOURCE_OUTPUT_DIR}${RESOURCE_NAME_WE}.res" DESTINATION ${PARSED_ARGS_DESTINATION} PERMISSIONS OWNER_READ GROUP_READ WORLD_READ)
+        endif(PARSED_ARGS_DESTINATION AND NOT PARSED_ARGS_PACKAGE)
+
+        list(APPEND TARGET_RESOURCES "${RESOURCE_TARGET_NAME}")
+        list(APPEND COMPILED_RESOURCES_PATH "${RESOURCE_OUTPUT_DIR}${RESOURCE_NAME_WE}.res")
+        set(COMPILED_RESOURCES_BASENAME "${COMPILED_RESOURCES_BASENAME} ${RESOURCE_NAME_WE}.res")
+    endforeach(RESOURCE_SOURCE)
+
+    if(PARSED_ARGS_PACKAGE)
+        add_custom_command(
+            OUTPUT "${PACKAGE_LIST_OUTPUT_PATH}"
+            COMMAND ${CMAKE_COMMAND} -E echo "${COMPILED_RESOURCES_BASENAME}" > "${PACKAGE_LIST_OUTPUT_PATH}"
+            DEPENDS ${COMPILED_RESOURCES_PATH}
+        )
+        add_custom_command(
+            OUTPUT "${PACKAGE_OUTPUT_PATH}"
+            COMMAND ${CMAKE_COMMAND} -E chdir ${RESOURCE_GENRB_CHDIR_DIR} ${${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE} -s ${PACKAGE_NAME_WE} -p ${PACKAGE_NAME_WE} -F "${PACKAGE_LIST_OUTPUT_PATH}"
+            DEPENDS "${PACKAGE_LIST_OUTPUT_PATH}"
+        )
+        add_custom_target(
+            "${PACKAGE_TARGET_NAME}" ALL
+            COMMENT ""
+            DEPENDS "${PACKAGE_OUTPUT_PATH}"
+        )
+        add_custom_target(
+            "${PACKAGE_LIST_TARGET_NAME}" ALL
+            COMMENT ""
+            DEPENDS "${PACKAGE_LIST_OUTPUT_PATH}"
+        )
+        add_dependencies("${PACKAGE_TARGET_NAME}" "${PACKAGE_LIST_TARGET_NAME}")
+        add_dependencies("${PACKAGE_LIST_TARGET_NAME}" ${TARGET_RESOURCES})
+
+        if(PARSED_ARGS_DESTINATION)
+            install(FILES "${PACKAGE_OUTPUT_PATH}" DESTINATION ${PARSED_ARGS_DESTINATION} PERMISSIONS OWNER_READ GROUP_READ WORLD_READ)
+        endif(PARSED_ARGS_DESTINATION)
+    endif(PARSED_ARGS_PACKAGE)
+
+endfunction(generate_icu_resource_bundle)
+
+########## </resource bundle support> ##########
+
 # IN (args)
 icudebug("FIND_COMPONENTS")
 icudebug("FIND_REQUIRED")
@@ -283,6 +433,9 @@ icudebug("DATA_FOUND")
 # Linking
 icudebug("INCLUDE_DIRS")
 icudebug("LIBRARIES")
+# Executables
+icudebug("GENRB_EXECUTABLE")
+icudebug("PKGDATA_EXECUTABLE")
 # Version
 icudebug("MAJOR_VERSION")
 icudebug("MINOR_VERSION")
