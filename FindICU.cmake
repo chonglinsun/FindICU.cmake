@@ -282,11 +282,12 @@ endif(NOT ${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE)
 
 #
 # Prototype:
-#   generate_icu_resource_bundle([PACKAGE <name>] [DESTINATION <location>] [pattern or list of files])
+#   generate_icu_resource_bundle([PACKAGE <name>] [DESTINATION <location>] [list of files])
 #
 # Arguments:
-#   PACKAGE <name>         : optional, package all resource bundles
-#   DESTINATION <location> : optional, directory where to install final binary file(s)
+#   - PACKAGE <name>         : optional, package name (not a path) to package all resource bundles together
+#   - DESTINATION <location> : optional, directory where to install final binary file(s)
+#                              Note: if DESTINATION is relative, it will be relative to ${CMAKE_INSTALL_PREFIX}
 #
 
 # TODO:
