@@ -268,6 +268,15 @@ mark_as_advanced(
 
 ########## <resource bundle support> ##########
 
+########## Private ##########
+function(extract_locale_from_rb _BUNDLE_SOURCE _RETURN_VAR_NAME)
+    file(READ "${_BUNDLE_SOURCE}" _BUNDLE_CONTENTS)
+    string(REGEX REPLACE "//[^\n]*\n" "" _BUNDLE_CONTENTS_WITHOUT_COMMENTS ${_BUNDLE_CONTENTS})
+    string(REGEX REPLACE "[ \t\n]" "" _BUNDLE_CONTENTS_WITHOUT_COMMENTS_AND_SPACES ${_BUNDLE_CONTENTS_WITHOUT_COMMENTS})
+    string(REGEX MATCH "^([a-zA-Z_-]+)(:table)?{" LOCALE_FOUND ${_BUNDLE_CONTENTS_WITHOUT_COMMENTS_AND_SPACES})
+    set("${_RETURN_VAR_NAME}" "${CMAKE_MATCH_1}" PARENT_SCOPE)
+endfunction(extract_locale_from_rb)
+
 ########## Public ##########
 find_program(${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE genrb)
 find_program(${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE pkgdata)
@@ -282,34 +291,99 @@ endif(NOT ${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE)
 
 #
 # Prototype:
-#   generate_icu_resource_bundle([PACKAGE <name>] [DESTINATION <location>] [list of files])
+#   generate_icu_resource_bundle([PACKAGE <name>] [DESTINATION <location>] [FILES <list of files>])
 #
-# Arguments:
-#   - PACKAGE <name>         : optional, package name (not a path) to package all resource bundles together
-#   - DESTINATION <location> : optional, directory where to install final binary file(s)
-#                              Note: if DESTINATION is relative, it will be relative to ${CMAKE_INSTALL_PREFIX}
+# Common arguments:
+#   - FILES <file 1> ... <file N> : list of resource bundles sources
+#   - DEPENDS
+#   - DESTINATION <location>      : optional, directory where to install final binary file(s)
+#   - FORMAT <name>               : optional, one of none (ICU4C binary format), java (plain java) or xliff (XML), see below
 #
-
-# TODO:
-# - java support?
-# - library format
-# - static format
+# Arguments depending on FORMAT:
+#   - none (default):
+#       * PACKAGE <name> : optional, to package all resource bundles together
+#       * TYPE <name>    : one of :
+#           + common or archive (default) : ...
+#           + library or dll              : ...
+#           + static                      : ...
+#   - JAVA:
+#       * BUNDLE <name> : required, prefix for generated classnames
+#   - XLIFF:
+#       (none)
+#
 
 function(generate_icu_resource_bundle)
+
+    ##### <hash constants> #####
+    # filename extension of built resource bundle (without dot)
+    set(BUNDLES__SUFFIX "res")
+    set(BUNDLES_JAVA_SUFFIX "java")
+    set(BUNDLES_XLIFF_SUFFIX "xlf")
+    # alias: none (default) = common = archive ; dll = library ; static
+    set(PKGDATA__ALIAS "")
+    set(PKGDATA_COMMON_ALIAS "")
+    set(PKGDATA_ARCHIVE_ALIAS "")
+    set(PKGDATA_DLL_ALIAS "LIBRARY")
+    set(PKGDATA_LIBRARY_ALIAS "LIBRARY")
+    set(PKGDATA_STATIC_ALIAS "STATIC")
+    # filename extension of built package (with dot)
+    set(PKGDATA__SUFFIX ".dat")
+    set(PKGDATA_LIBRARY_SUFFIX "${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set(PKGDATA_STATIC_SUFFIX "${CMAKE_STATIC_LIBRARY_SUFFIX}")
+    # pkgdata option specific mode
+    set(PKGDATA__OPTIONS "-m" "common")
+    set(PKGDATA_STATIC_OPTIONS "-m" "static")
+    set(PKGDATA_LIBRARY_OPTIONS "-m" "library")
+    ##### </hash constants> #####
 
     set(PACKAGE_TARGET_PREFIX "ICU_PKG_")
     set(RESOURCE_TARGET_PREFIX "ICU_RB_")
 
-    cmake_parse_arguments(PARSED_ARGS "" "PACKAGE;DESTINATION" "" ${ARGN})
+    cmake_parse_arguments(
+        PARSED_ARGS # output variable name
+        # options (true/false) (default value: false)
+        ""
+        # univalued parameters (default value: "")
+        "PACKAGE;DESTINATION;TYPE;FORMAT;BUNDLE"
+        # multivalued parameters (default value: "")
+        "FILES;DEPENDS"
+        ${ARGN}
+    )
 
-    # assert(PARSED_ARGS_UNPARSED_ARGUMENTS > 0)
-    list(LENGTH PARSED_ARGS_UNPARSED_ARGUMENTS PARSED_ARGS_UNPARSED_ARGUMENTS_LEN)
-    if(PARSED_ARGS_UNPARSED_ARGUMENTS_LEN LESS 1)
-        message(FATAL_ERROR "generate_icu_resource_bundle() expects at least 1 resource bundle, 0 given")
-    endif(PARSED_ARGS_UNPARSED_ARGUMENTS_LEN LESS 1)
+    # assert(length(PARSED_ARGS_FILES) > 0)
+    list(LENGTH PARSED_ARGS_FILES PARSED_ARGS_FILES_LEN)
+    if(PARSED_ARGS_FILES_LEN LESS 1)
+        message(FATAL_ERROR "generate_icu_resource_bundle() expects at least 1 resource bundle as FILES argument, 0 given")
+    endif(PARSED_ARGS_FILES_LEN LESS 1)
+
+    string(TOUPPER "${PARSED_ARGS_FORMAT}" UPPER_FORMAT)
+    # assert(${UPPER_FORMAT} in ['', 'java', 'xlif'])
+    if(NOT DEFINED BUNDLES_${UPPER_FORMAT}_SUFFIX)
+        message(FATAL_ERROR "generate_icu_resource_bundle(): unknown FORMAT '${PARSED_ARGS_FORMAT}'")
+    endif(NOT DEFINED BUNDLES_${UPPER_FORMAT}_SUFFIX)
+
+    if(UPPER_FORMAT STREQUAL "JAVA")
+        # assert(${PARSED_ARGS_BUNDLE} != "")
+        if(NOT PARSED_ARGS_BUNDLE)
+            message(FATAL_ERROR "generate_icu_resource_bundle(): java bundle name expected, BUNDLE parameter missing")
+        endif(NOT PARSED_ARGS_BUNDLE)
+    endif(UPPER_FORMAT STREQUAL "JAVA")
 
     if(PARSED_ARGS_PACKAGE)
-        # Package name: strip file extension (".dat") if present
+        # assert(${PARSED_ARGS_FORMAT} == "")
+        if(PARSED_ARGS_FORMAT)
+            message(FATAL_ERROR "generate_icu_resource_bundle(): packaging is only supported for binary format, not xlif neither java outputs")
+        endif(PARSED_ARGS_FORMAT)
+
+        string(TOUPPER "${PARSED_ARGS_TYPE}" UPPER_MODE)
+        # assert(${UPPER_MODE} in ['', 'common', 'archive', 'dll', library'])
+        if(NOT DEFINED PKGDATA_${UPPER_MODE}_ALIAS)
+            message(FATAL_ERROR "generate_icu_resource_bundle(): unknown TYPE '${PARSED_ARGS_TYPE}'")
+        else(NOT DEFINED PKGDATA_${UPPER_MODE}_ALIAS)
+            set(TYPE "${PKGDATA_${UPPER_MODE}_ALIAS}")
+        endif(NOT DEFINED PKGDATA_${UPPER_MODE}_ALIAS)
+
+        # Package name: strip file extension if present
         get_filename_component(PACKAGE_NAME_WE ${PARSED_ARGS_PACKAGE} NAME_WE)
         # Target name to build package
         set(PACKAGE_TARGET_NAME "${PACKAGE_TARGET_PREFIX}${PACKAGE_NAME_WE}")
@@ -320,7 +394,11 @@ function(generate_icu_resource_bundle)
         # Directory (absolute) where resource bundles are built: concatenation of RESOURCE_GENRB_CHDIR_DIR and package name
         set(RESOURCE_OUTPUT_DIR "${RESOURCE_GENRB_CHDIR_DIR}/${PACKAGE_NAME_WE}/")
         # Output (relative) path for built package
-        set(PACKAGE_OUTPUT_PATH "${RESOURCE_GENRB_CHDIR_DIR}/${PACKAGE_NAME_WE}.dat")
+        if(NOT TYPE)
+            set(PACKAGE_OUTPUT_PATH "${RESOURCE_GENRB_CHDIR_DIR}/${PACKAGE_NAME_WE}${PKGDATA_${TYPE}_SUFFIX}")
+        else(NOT TYPE)
+            set(PACKAGE_OUTPUT_PATH "${RESOURCE_GENRB_CHDIR_DIR}/${PACKAGE_NAME_WE}/${PACKAGE_NAME_WE}${PKGDATA_${TYPE}_SUFFIX}")
+        endif(NOT TYPE)
         # Output (absolute) path for the list file
         set(PACKAGE_LIST_OUTPUT_PATH "${RESOURCE_GENRB_CHDIR_DIR}/pkglist.txt")
 
@@ -332,10 +410,11 @@ function(generate_icu_resource_bundle)
 
     set(TARGET_RESOURCES )
     set(COMPILED_RESOURCES_PATH )
-    set(COMPILED_RESOURCES_BASENAME "") # Use a whitespace separated string not a semicolon separated list, last one is system dependant (it [echo] will fail on Unix systems)
-    foreach(RESOURCE_SOURCE ${PARSED_ARGS_UNPARSED_ARGUMENTS})
+    # Use a whitespace separated string not a semicolon separated list
+    # last one is system dependant (the following echo will fail on Unix systems)
+    set(COMPILED_RESOURCES_BASENAME "")
+    foreach(RESOURCE_SOURCE ${PARSED_ARGS_FILES})
         get_filename_component(RESOURCE_NAME_WE ${RESOURCE_SOURCE} NAME_WE)
-        set(RESOURCE_TARGET_NAME "${RESOURCE_TARGET_PREFIX}${PACKAGE_NAME_WE}_${RESOURCE_NAME_WE}")
         get_filename_component(SOURCE_BASENAME ${RESOURCE_SOURCE} NAME)
         get_filename_component(RELATIVE_SOURCE_DIRECTORY ${RESOURCE_SOURCE} PATH)
         if(NOT RELATIVE_SOURCE_DIRECTORY)
@@ -348,22 +427,50 @@ function(generate_icu_resource_bundle)
             file(MD5 ${RESOURCE_SOURCE} PACKAGE_NAME_WE)
         endif(NOT PARSED_ARGS_PACKAGE)
 
+        if(UPPER_FORMAT STREQUAL "XLIFF")
+            if(RESOURCE_NAME_WE STREQUAL "root")
+                set(XLIFF_LANGUAGE "en")
+            else(RESOURCE_NAME_WE STREQUAL "root")
+                string(REGEX REPLACE "[^a-z].*$" "" XLIFF_LANGUAGE "${RESOURCE_NAME_WE}")
+            endif(RESOURCE_NAME_WE STREQUAL "root")
+        endif(UPPER_FORMAT STREQUAL "XLIFF")
+
         if(NOT SOURCE_DIRECTORY)
             set(SOURCE_DIRECTORY ".")
         endif(NOT SOURCE_DIRECTORY)
 
+        ##### <templates> #####
+        set(RESOURCE_TARGET_NAME "${RESOURCE_TARGET_PREFIX}${PACKAGE_NAME_WE}_${RESOURCE_NAME_WE}")
+
+        # <TODO>
+        # assert(extract_locale_from_rb(${RESOURCE_SOURCE}) == ${RESOURCE_NAME_WE})
+        set(RESOURCE_OUTPUT__PATH "${RESOURCE_NAME_WE}.res")
+        # </TODO>
+        if(RESOURCE_NAME_WE STREQUAL "root")
+            set(RESOURCE_OUTPUT_JAVA_PATH "${PARSED_ARGS_BUNDLE}.java")
+        else(RESOURCE_NAME_WE STREQUAL "root")
+            set(RESOURCE_OUTPUT_JAVA_PATH "${PARSED_ARGS_BUNDLE}_${RESOURCE_NAME_WE}.java")
+        endif(RESOURCE_NAME_WE STREQUAL "root")
+        set(RESOURCE_OUTPUT_XLIFF_PATH "${RESOURCE_NAME_WE}.xlf")
+
+        set(GENRB__OPTIONS "")
+        set(GENRB_JAVA_OPTIONS "-j" "-b" "${PARSED_ARGS_BUNDLE}")
+        set(GENRB_XLIFF_OPTIONS "-x" "-l" "${XLIFF_LANGUAGE}")
+        ##### </templates> #####
+
         if(PARSED_ARGS_PACKAGE)
             add_custom_command(
-                OUTPUT "${RESOURCE_OUTPUT_DIR}${RESOURCE_NAME_WE}.res"
+                OUTPUT "${RESOURCE_OUTPUT_DIR}${RESOURCE_OUTPUT_${UPPER_FORMAT}_PATH}"
                 #COMMAND ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} ${GENRB_ARGS} ${RESOURCE_SOURCE}
-                COMMAND ${CMAKE_COMMAND} -E chdir ${RESOURCE_GENRB_CHDIR_DIR} ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} -d${PACKAGE_NAME_WE} -s${ABSOLUTE_SOURCE_DIRECTORY} ${SOURCE_BASENAME}
+                COMMAND ${CMAKE_COMMAND} -E chdir ${RESOURCE_GENRB_CHDIR_DIR} ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} ${GENRB_${UPPER_FORMAT}_OPTIONS} -d${PACKAGE_NAME_WE}
+-s${ABSOLUTE_SOURCE_DIRECTORY} ${SOURCE_BASENAME}
                 #COMMAND ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} ${GENRB_ARGS} -s"${SOURCE_DIRECTORY}" ${SOURCE_BASENAME}
                 DEPENDS ${RESOURCE_SOURCE}
             )
         else(PARSED_ARGS_PACKAGE)
             add_custom_command(
-                OUTPUT "${RESOURCE_OUTPUT_DIR}${RESOURCE_NAME_WE}.res"
-                COMMAND ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} ${RESOURCE_SOURCE}
+                OUTPUT "${RESOURCE_OUTPUT_DIR}${RESOURCE_OUTPUT_${UPPER_FORMAT}_PATH}"
+                COMMAND ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} ${GENRB_${UPPER_FORMAT}_OPTIONS} ${RESOURCE_SOURCE}
                 #COMMAND ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} -s"${SOURCE_DIRECTORY}" ${SOURCE_BASENAME}
                 DEPENDS ${RESOURCE_SOURCE}
             )
@@ -371,17 +478,17 @@ function(generate_icu_resource_bundle)
         add_custom_target(
             "${RESOURCE_TARGET_NAME}" ALL
             COMMENT ""
-            DEPENDS "${RESOURCE_OUTPUT_DIR}${RESOURCE_NAME_WE}.res"
+            DEPENDS "${RESOURCE_OUTPUT_DIR}${RESOURCE_OUTPUT_${UPPER_FORMAT}_PATH}"
             SOURCES ${RESOURCE_SOURCE}
         )
 
         if(PARSED_ARGS_DESTINATION AND NOT PARSED_ARGS_PACKAGE)
-            install(FILES "${RESOURCE_OUTPUT_DIR}${RESOURCE_NAME_WE}.res" DESTINATION ${PARSED_ARGS_DESTINATION} PERMISSIONS OWNER_READ GROUP_READ WORLD_READ)
+            install(FILES "${RESOURCE_OUTPUT_DIR}${RESOURCE_OUTPUT_${UPPER_FORMAT}_PATH}" DESTINATION ${PARSED_ARGS_DESTINATION} PERMISSIONS OWNER_READ GROUP_READ WORLD_READ)
         endif(PARSED_ARGS_DESTINATION AND NOT PARSED_ARGS_PACKAGE)
 
         list(APPEND TARGET_RESOURCES "${RESOURCE_TARGET_NAME}")
-        list(APPEND COMPILED_RESOURCES_PATH "${RESOURCE_OUTPUT_DIR}${RESOURCE_NAME_WE}.res")
-        set(COMPILED_RESOURCES_BASENAME "${COMPILED_RESOURCES_BASENAME} ${RESOURCE_NAME_WE}.res")
+        list(APPEND COMPILED_RESOURCES_PATH "${RESOURCE_OUTPUT_DIR}${RESOURCE_OUTPUT_${UPPER_FORMAT}_PATH}")
+        set(COMPILED_RESOURCES_BASENAME "${COMPILED_RESOURCES_BASENAME} ${RESOURCE_NAME_WE}.${BUNDLES_${UPPER_FORMAT}_SUFFIX}")
     endforeach(RESOURCE_SOURCE)
 
     if(PARSED_ARGS_PACKAGE)
@@ -392,7 +499,8 @@ function(generate_icu_resource_bundle)
         )
         add_custom_command(
             OUTPUT "${PACKAGE_OUTPUT_PATH}"
-            COMMAND ${CMAKE_COMMAND} -E chdir ${RESOURCE_GENRB_CHDIR_DIR} ${${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE} -s ${PACKAGE_NAME_WE} -p ${PACKAGE_NAME_WE} -F "${PACKAGE_LIST_OUTPUT_PATH}"
+            COMMAND ${CMAKE_COMMAND} -E chdir ${RESOURCE_GENRB_CHDIR_DIR} ${${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE} ${PKGDATA_${TYPE}_OPTIONS} -s ${PACKAGE_NAME_WE} -p
+${PACKAGE_NAME_WE} -F ${PACKAGE_LIST_OUTPUT_PATH}
             DEPENDS "${PACKAGE_LIST_OUTPUT_PATH}"
         )
         add_custom_target(
