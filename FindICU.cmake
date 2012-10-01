@@ -294,22 +294,37 @@ endif(NOT ${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE)
 #   generate_icu_resource_bundle([PACKAGE <name>] [DESTINATION <location>] [FILES <list of files>])
 #
 # Common arguments:
-#   - FILES <file 1> ... <file N> : list of resource bundles sources
-#   - DEPENDS
-#   - DESTINATION <location>      : optional, directory where to install final binary file(s)
-#   - FORMAT <name>               : optional, one of none (ICU4C binary format), java (plain java) or xliff (XML), see below
+#   - FILES <file 1> ... <file N>      : list of resource bundles sources
+#   - DEPENDS <target1> ... <target N> : optional (default: all) but required to package as library (shared or static),
+#                                        a list of cmake parent targets on which resource bundles or package depends
+#                                        Note: only (PREVIOUSLY DECLARED) add_executable and add_library as dependencies
+#   - DESTINATION <location>           : optional, directory where to install final binary file(s)
+#   - FORMAT <name>                    : optional, one of none (ICU4C binary format, default), java (plain java) or xliff (XML), see below
 #
 # Arguments depending on FORMAT:
 #   - none (default):
 #       * PACKAGE <name> : optional, to package all resource bundles together
 #       * TYPE <name>    : one of :
-#           + common or archive (default) : ...
-#           + library or dll              : ...
-#           + static                      : ...
+#           + common or archive (default) : archive all ressource bundles into a single .dat file
+#           + library or dll              : assemble all ressource bundles into a separate and loadable library (.dll/.so)
+#           + static                      : integrate all ressource bundles to targets designed by DEPENDS parameter (as a static library)
 #   - JAVA:
 #       * BUNDLE <name> : required, prefix for generated classnames
 #   - XLIFF:
 #       (none)
+#
+
+#
+# TODO:
+# - default locale is "fr_FR", not "root" when running rb?
+# - DEPENDS argument:
+#     + ALL as default value
+#     + modify add_custom_target (s/ALL/${PARSED_ARGS_DEPENDS} || ALL/)
+#     + assert ${PARSED_ARGS_DEPENDS} != "" if ${PARSED_ARGS_PACKAGE} != "" and ${PKGDATA_LIBRARY_${TYPE}_TYPE} != ""
+# - return (via an output variable) all final generated files BEFORE installation?
+# - let the user name its target (add an argument to generate_icu_resource_bundle)?
+# - rename all functions ("icu_" prefix for public functions, "_icu_" prefix for private functions)?
+# - genrb (add_custom_command), when ${PARSED_ARGS_PACKAGE} == "", chdir to resource bundle source's directory
 #
 
 function(generate_icu_resource_bundle)
@@ -326,14 +341,22 @@ function(generate_icu_resource_bundle)
     set(PKGDATA_DLL_ALIAS "LIBRARY")
     set(PKGDATA_LIBRARY_ALIAS "LIBRARY")
     set(PKGDATA_STATIC_ALIAS "STATIC")
+    # filename prefix of built package
+    set(PKGDATA__PREFIX "")
+    set(PKGDATA_LIBRARY_PREFIX "${CMAKE_SHARED_LIBRARY_PREFIX}")
+    set(PKGDATA_STATIC_PREFIX "${CMAKE_STATIC_LIBRARY_PREFIX}")
     # filename extension of built package (with dot)
     set(PKGDATA__SUFFIX ".dat")
     set(PKGDATA_LIBRARY_SUFFIX "${CMAKE_SHARED_LIBRARY_SUFFIX}")
     set(PKGDATA_STATIC_SUFFIX "${CMAKE_STATIC_LIBRARY_SUFFIX}")
-    # pkgdata option specific mode
+    # pkgdata option mode specific
     set(PKGDATA__OPTIONS "-m" "common")
     set(PKGDATA_STATIC_OPTIONS "-m" "static")
     set(PKGDATA_LIBRARY_OPTIONS "-m" "library")
+    # cmake library type for output package
+    set(PKGDATA_LIBRARY__TYPE "")
+    set(PKGDATA_LIBRARY_STATIC_TYPE STATIC)
+    set(PKGDATA_LIBRARY_LIBRARY_TYPE SHARED)
     ##### </hash constants> #####
 
     set(PACKAGE_TARGET_PREFIX "ICU_PKG_")
@@ -394,11 +417,11 @@ function(generate_icu_resource_bundle)
         # Directory (absolute) where resource bundles are built: concatenation of RESOURCE_GENRB_CHDIR_DIR and package name
         set(RESOURCE_OUTPUT_DIR "${RESOURCE_GENRB_CHDIR_DIR}/${PACKAGE_NAME_WE}/")
         # Output (relative) path for built package
-        if(NOT TYPE)
-            set(PACKAGE_OUTPUT_PATH "${RESOURCE_GENRB_CHDIR_DIR}/${PACKAGE_NAME_WE}${PKGDATA_${TYPE}_SUFFIX}")
-        else(NOT TYPE)
-            set(PACKAGE_OUTPUT_PATH "${RESOURCE_GENRB_CHDIR_DIR}/${PACKAGE_NAME_WE}/${PACKAGE_NAME_WE}${PKGDATA_${TYPE}_SUFFIX}")
-        endif(NOT TYPE)
+#         if(NOT TYPE)
+            set(PACKAGE_OUTPUT_PATH "${RESOURCE_GENRB_CHDIR_DIR}/${PKGDATA_${TYPE}_PREFIX}${PACKAGE_NAME_WE}${PKGDATA_${TYPE}_SUFFIX}")
+#         else(NOT TYPE)
+#             set(PACKAGE_OUTPUT_PATH "${RESOURCE_GENRB_CHDIR_DIR}/${PACKAGE_NAME_WE}/${PKGDATA_${TYPE}_PREFIX}${PACKAGE_NAME_WE}${PKGDATA_${TYPE}_SUFFIX}")
+#         endif(NOT TYPE)
         # Output (absolute) path for the list file
         set(PACKAGE_LIST_OUTPUT_PATH "${RESOURCE_GENRB_CHDIR_DIR}/pkglist.txt")
 
@@ -411,7 +434,7 @@ function(generate_icu_resource_bundle)
     set(TARGET_RESOURCES )
     set(COMPILED_RESOURCES_PATH )
     # Use a whitespace separated string not a semicolon separated list
-    # last one is system dependant (the following echo will fail on Unix systems)
+    # last one is system dependant (the following echo will fail on an Unix system)
     set(COMPILED_RESOURCES_BASENAME "")
     foreach(RESOURCE_SOURCE ${PARSED_ARGS_FILES})
         get_filename_component(RESOURCE_NAME_WE ${RESOURCE_SOURCE} NAME_WE)
@@ -444,6 +467,7 @@ function(generate_icu_resource_bundle)
 
         # <TODO>
         # assert(extract_locale_from_rb(${RESOURCE_SOURCE}) == ${RESOURCE_NAME_WE})
+        # or better: s/get_filename_component(RESOURCE_NAME_WE ${RESOURCE_SOURCE} NAME_WE)/extract_locale_from_rb(${RESOURCE_SOURCE} RESOURCE_NAME_WE)/
         set(RESOURCE_OUTPUT__PATH "${RESOURCE_NAME_WE}.res")
         # </TODO>
         if(RESOURCE_NAME_WE STREQUAL "root")
@@ -503,11 +527,22 @@ function(generate_icu_resource_bundle)
 ${PACKAGE_NAME_WE} -F ${PACKAGE_LIST_OUTPUT_PATH}
             DEPENDS "${PACKAGE_LIST_OUTPUT_PATH}"
         )
+# <test>
+if(PKGDATA_LIBRARY_${TYPE}_TYPE)
+    # TODO:
+    # - add_library would replace add_custom_target for ${PACKAGE_TARGET_NAME} ?
+    # - assert(${PARSED_ARGS_DEPENDS} != "")
+    add_library("${PACKAGE_TARGET_NAME}" ${PKGDATA_LIBRARY_${TYPE}_TYPE} IMPORTED)
+    set_target_properties("${PACKAGE_TARGET_NAME}" PROPERTIES IMPORTED_LOCATION ${PACKAGE_OUTPUT_PATH} IMPORTED_IMPLIB ${PACKAGE_OUTPUT_PATH})
+    target_link_libraries(${PARSED_ARGS_DEPENDS} "${PACKAGE_TARGET_NAME}")
+else(PKGDATA_LIBRARY_${TYPE}_TYPE)
         add_custom_target(
             "${PACKAGE_TARGET_NAME}" ALL
             COMMENT ""
             DEPENDS "${PACKAGE_OUTPUT_PATH}"
         )
+endif(PKGDATA_LIBRARY_${TYPE}_TYPE)
+# </test>
         add_custom_target(
             "${PACKAGE_LIST_TARGET_NAME}" ALL
             COMMENT ""
