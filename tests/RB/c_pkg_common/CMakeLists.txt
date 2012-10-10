@@ -18,5 +18,5 @@ target_link_libraries(rb ${ICU_LIBRARIES})
 generate_icu_resource_bundle(
     PACKAGE rb
     DESTINATION bin # share the same directory with the binary
-    FILES ../root.txt ../fr/fr.txt
+    FILES ../root.txt ../fr/fr.txt ../es/es.txt ../es/es_ES.txt
 )

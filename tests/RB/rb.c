@@ -8,25 +8,37 @@
 # include <unicode/udata.h>
 #endif /* !URES_COMMON */
 
+#ifndef _WIN32
+# define RED(str) "\33[1;31m" str "\33[0m"
+# define GREEN(str) "\33[1;32m" str "\33[0m"
+# define YELLOW(str) "\33[1;33m" str "\33[0m"
+#else
+# define RED(str) str
+# define GREEN(str) str
+# define YELLOW(str) str
+#endif /* !_WIN32 */
+
 #ifndef URES_COMMON
 const void U_IMPORT *rb_dat;
 #endif /* !URES_COMMON */
 
+#define debug(format, ...) \
+    fprintf(stderr, format, ## __VA_ARGS__);
+
 int main(int argc, char **argv)
 {
     int ret;
+    UFILE *ustdout;
     int32_t msg_len;
     const UChar *msg;
     UErrorCode status;
     UResourceBundle *ures;
-    UFILE *ustdout, *ustderr;
-    const char *locale = "fr_FR";
+    const char *locale = NULL;//"fr_FR";
 
     ures = NULL;
     ret = EXIT_FAILURE;
     status = U_ZERO_ERROR;
     ustdout = u_finit(stdout, NULL, NULL);
-    ustderr = u_finit(stderr, NULL, NULL);
 
     if (2 == argc) {
         locale = argv[1];
@@ -37,20 +49,21 @@ int main(int argc, char **argv)
 #else
     udata_setAppData(URESNAME, &rb_dat, &status);
     if (U_FAILURE(status)) {
-        u_fprintf(ustderr, "udata_setAppData failed: %s\n", u_errorName(status));
+        debug("udata_setAppData failed: %s\n", u_errorName(status));
         goto end;
     }
 #endif /* !URES_COMMON */
 
+    debug("loading locale: %s\n", NULL == locale ? "-" : locale);
     ures = ures_open(URESNAME, locale, &status);
     if (U_FAILURE(status)) {
-        u_fprintf(ustderr, "translation disabled: %s\n", u_errorName(status));
+        debug("translation " RED("disabled") ": %s\n", u_errorName(status));
         goto end;
     } else {
         if (U_USING_DEFAULT_WARNING == status) {
-            u_fprintf(ustderr, "default translation enabled\n");
+            debug(YELLOW("default") " translation enabled\n");
         } else {
-            u_fprintf(ustderr, "translation enabled: %s\n", ures_getLocaleByType(ures, ULOC_ACTUAL_LOCALE, &status));
+            debug("translation " GREEN("enabled") ": %s\n", ures_getLocaleByType(ures, ULOC_ACTUAL_LOCALE, &status));
         }
     }
     /* */
@@ -59,10 +72,10 @@ int main(int argc, char **argv)
         // TODO: "better"
         goto end;
     } else if (U_USING_DEFAULT_WARNING == status) {
-        u_fprintf(ustderr, "[M] default translation used\n");
+        debug("[M] default translation used\n");
     } else if (U_USING_FALLBACK_WARNING == status) {
         /* on working tests you see that because resource bundle source has 'fr' as locale not 'fr_FR' */
-        u_fprintf(ustderr, "[M] translation fallback\n");
+        debug("[M] translation fallback\n");
     }
     u_fprintf(ustdout, "%S\n", msg);
     /* */
@@ -73,7 +86,6 @@ end:
         ures_close(ures);
     }
     u_fclose(ustdout);
-    u_fclose(ustderr);
     u_cleanup();
 
     return ret;

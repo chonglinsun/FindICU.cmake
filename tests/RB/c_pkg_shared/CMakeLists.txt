@@ -21,6 +21,5 @@ generate_icu_resource_bundle(
     TYPE library
     DESTINATION bin # share the same directory with the binary
     DEPENDS rb # add_executable
-    FILES ../root.txt ../fr/fr.txt
+    FILES ../root.txt ../fr/fr.txt ../es/es.txt ../es/es_ES.txt
 )
-

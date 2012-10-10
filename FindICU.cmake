@@ -316,7 +316,7 @@ endif(NOT ${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE)
 
 #
 # TODO:
-# - default locale is "fr_FR", not "root" when running rb?
+# - default locale is "fr_FR", not "root" when running rb? => LANG seems to be in conflict with argv[1]? (./rb it = "fr.txt" but LANG=it_IT ./rb it = "root.txt")
 # - DEPENDS argument:
 #     + ALL as default value
 #     + modify add_custom_target (s/ALL/${PARSED_ARGS_DEPENDS} || ALL/)
@@ -486,8 +486,7 @@ function(generate_icu_resource_bundle)
             add_custom_command(
                 OUTPUT "${RESOURCE_OUTPUT_DIR}${RESOURCE_OUTPUT_${UPPER_FORMAT}_PATH}"
                 #COMMAND ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} ${GENRB_ARGS} ${RESOURCE_SOURCE}
-                COMMAND ${CMAKE_COMMAND} -E chdir ${RESOURCE_GENRB_CHDIR_DIR} ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} ${GENRB_${UPPER_FORMAT}_OPTIONS} -d${PACKAGE_NAME_WE}
--s${ABSOLUTE_SOURCE_DIRECTORY} ${SOURCE_BASENAME}
+                COMMAND ${CMAKE_COMMAND} -E chdir ${RESOURCE_GENRB_CHDIR_DIR} ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} ${GENRB_${UPPER_FORMAT}_OPTIONS} -d${PACKAGE_NAME_WE} -s${ABSOLUTE_SOURCE_DIRECTORY} ${SOURCE_BASENAME}
                 #COMMAND ${${ICU_PUBLIC_VAR_NS}_GENRB_EXECUTABLE} ${GENRB_ARGS} -s"${SOURCE_DIRECTORY}" ${SOURCE_BASENAME}
                 DEPENDS ${RESOURCE_SOURCE}
             )
@@ -523,8 +522,7 @@ function(generate_icu_resource_bundle)
         )
         add_custom_command(
             OUTPUT "${PACKAGE_OUTPUT_PATH}"
-            COMMAND ${CMAKE_COMMAND} -E chdir ${RESOURCE_GENRB_CHDIR_DIR} ${${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE} ${PKGDATA_${TYPE}_OPTIONS} -s ${PACKAGE_NAME_WE} -p
-${PACKAGE_NAME_WE} -F ${PACKAGE_LIST_OUTPUT_PATH}
+            COMMAND ${CMAKE_COMMAND} -E chdir ${RESOURCE_GENRB_CHDIR_DIR} ${${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE} ${PKGDATA_${TYPE}_OPTIONS} -s ${PACKAGE_NAME_WE} -p ${PACKAGE_NAME_WE} -F ${PACKAGE_LIST_OUTPUT_PATH}
             DEPENDS "${PACKAGE_LIST_OUTPUT_PATH}"
         )
 # <test>

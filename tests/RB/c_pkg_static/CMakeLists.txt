@@ -23,6 +23,5 @@ generate_icu_resource_bundle(
     TYPE static
     # DESTINATION has no sense
     DEPENDS rb # add_executable
-    FILES ../root.txt ../fr/fr.txt
+    FILES ../root.txt ../fr/fr.txt ../es/es.txt ../es/es_ES.txt
 )
-
