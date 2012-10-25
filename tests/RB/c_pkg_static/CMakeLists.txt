@@ -11,15 +11,14 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ../../..)
 
 find_package(ICU COMPONENTS i18n io REQUIRED)
 
-add_definitions(-DURESNAME="rb")
+add_definitions(-DURESNAME=foo)
 include_directories(${ICU_INCLUDE_DIRS})
 add_executable(rb ../rb.c)
-set_target_properties(rb PROPERTIES ENABLE_EXPORTS TRUE)
 install(TARGETS rb DESTINATION bin)
 target_link_libraries(rb ${ICU_LIBRARIES})
 
 generate_icu_resource_bundle(
-    PACKAGE rb
+    PACKAGE foo
     TYPE static
     # DESTINATION has no sense
     DEPENDS rb # add_executable

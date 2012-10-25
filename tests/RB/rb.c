@@ -18,8 +18,15 @@
 # define YELLOW(str) str
 #endif /* !_WIN32 */
 
+#define STRINGIFY(x) #x
+#define STRINGIFY_EXPANDED(x) STRINGIFY(x)
+# define CONCAT(a, b) a ## b
+# define CONCAT_EXPANEDED(a, b) CONCAT(a, b)
+
+#define URES_STR STRINGIFY_EXPANDED(URESNAME)
 #ifndef URES_COMMON
-const void U_IMPORT *rb_dat;
+# define URES_SYM CONCAT_EXPANEDED(URESNAME, _dat)
+const void U_IMPORT *URES_SYM;
 #endif /* !URES_COMMON */
 
 #define debug(format, ...) \
@@ -47,7 +54,7 @@ int main(int argc, char **argv)
 #ifdef URES_COMMON
     u_setDataDirectory(".");
 #else
-    udata_setAppData(URESNAME, &rb_dat, &status);
+    udata_setAppData(URES_STR, &URES_SYM, &status);
     if (U_FAILURE(status)) {
         debug("udata_setAppData failed: %s\n", u_errorName(status));
         goto end;
@@ -55,7 +62,7 @@ int main(int argc, char **argv)
 #endif /* !URES_COMMON */
 
     debug("loading locale: %s\n", NULL == locale ? "-" : locale);
-    ures = ures_open(URESNAME, locale, &status);
+    ures = ures_open(URES_STR, locale, &status);
     if (U_FAILURE(status)) {
         debug("translation " RED("disabled") ": %s\n", u_errorName(status));
         goto end;

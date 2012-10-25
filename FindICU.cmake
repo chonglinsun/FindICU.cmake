@@ -323,9 +323,11 @@ endif(NOT ${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE)
 #     + assert ${PARSED_ARGS_DEPENDS} != "" if ${PARSED_ARGS_PACKAGE} != "" and ${PKGDATA_LIBRARY_${TYPE}_TYPE} != ""
 # - return (via an output variable) all final generated files BEFORE installation?
 # - let the user name its target (add an argument to generate_icu_resource_bundle)?
-# - rename all functions ("icu_" prefix for public functions, "_icu_" prefix for private functions)?
 # - genrb (add_custom_command), when ${PARSED_ARGS_PACKAGE} == "", chdir to resource bundle source's directory
-#
+# - automatically add -fPIC to COMPILE_FLAGS for shared type?
+# - dynamically forge "fake_foo_bar" target?
+# - rename all functions ("icu_" prefix for public functions, "_icu_" prefix for private functions)?
+# - cleanup
 
 function(generate_icu_resource_bundle)
 
@@ -524,23 +526,27 @@ function(generate_icu_resource_bundle)
             OUTPUT "${PACKAGE_OUTPUT_PATH}"
             COMMAND ${CMAKE_COMMAND} -E chdir ${RESOURCE_GENRB_CHDIR_DIR} ${${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE} ${PKGDATA_${TYPE}_OPTIONS} -s ${PACKAGE_NAME_WE} -p ${PACKAGE_NAME_WE} -F ${PACKAGE_LIST_OUTPUT_PATH}
             DEPENDS "${PACKAGE_LIST_OUTPUT_PATH}"
+            VERBATIM
         )
-# <test>
-if(PKGDATA_LIBRARY_${TYPE}_TYPE)
-    # TODO:
-    # - add_library would replace add_custom_target for ${PACKAGE_TARGET_NAME} ?
-    # - assert(${PARSED_ARGS_DEPENDS} != "")
-    add_library("${PACKAGE_TARGET_NAME}" ${PKGDATA_LIBRARY_${TYPE}_TYPE} IMPORTED)
-    set_target_properties("${PACKAGE_TARGET_NAME}" PROPERTIES IMPORTED_LOCATION ${PACKAGE_OUTPUT_PATH} IMPORTED_IMPLIB ${PACKAGE_OUTPUT_PATH})
-    target_link_libraries(${PARSED_ARGS_DEPENDS} "${PACKAGE_TARGET_NAME}")
-else(PKGDATA_LIBRARY_${TYPE}_TYPE)
-        add_custom_target(
-            "${PACKAGE_TARGET_NAME}" ALL
-            COMMENT ""
-            DEPENDS "${PACKAGE_OUTPUT_PATH}"
-        )
-endif(PKGDATA_LIBRARY_${TYPE}_TYPE)
-# </test>
+        if(PKGDATA_LIBRARY_${TYPE}_TYPE)
+            # TODO: assert(${PARSED_ARGS_DEPENDS} != "")
+            add_library(${PACKAGE_TARGET_NAME} ${PKGDATA_LIBRARY_${TYPE}_TYPE} IMPORTED)
+            set_target_properties(${PACKAGE_TARGET_NAME} PROPERTIES IMPORTED_LOCATION ${PACKAGE_OUTPUT_PATH} IMPORTED_IMPLIB ${PACKAGE_OUTPUT_PATH})
+            target_link_libraries(${PARSED_ARGS_DEPENDS} ${PACKAGE_TARGET_NAME})
+            # http://www.mail-archive.com/cmake-commits@cmake.org/msg01135.html
+            add_custom_target(
+                fake_foo_bar
+                COMMENT ""
+                DEPENDS "${PACKAGE_OUTPUT_PATH}"
+            )
+            add_dependencies("${PACKAGE_TARGET_NAME}" fake_foo_bar)
+        else(PKGDATA_LIBRARY_${TYPE}_TYPE)
+                add_custom_target(
+                    "${PACKAGE_TARGET_NAME}" ALL
+                    COMMENT ""
+                    DEPENDS "${PACKAGE_OUTPUT_PATH}"
+                )
+        endif(PKGDATA_LIBRARY_${TYPE}_TYPE)
         add_custom_target(
             "${PACKAGE_LIST_TARGET_NAME}" ALL
             COMMENT ""

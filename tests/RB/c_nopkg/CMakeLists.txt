@@ -9,7 +9,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ../../..)
 
 find_package(ICU COMPONENTS i18n io REQUIRED)
 
-add_definitions(-DURESNAME="." -DURES_COMMON)
+add_definitions(-DURESNAME=. -DURES_COMMON)
 include_directories(${ICU_INCLUDE_DIRS})
 add_executable(rb ../rb.c)
 install(TARGETS rb DESTINATION bin)
