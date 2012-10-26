@@ -532,7 +532,9 @@ function(generate_icu_resource_bundle)
             # TODO: assert(${PARSED_ARGS_DEPENDS} != "")
             add_library(${PACKAGE_TARGET_NAME} ${PKGDATA_LIBRARY_${TYPE}_TYPE} IMPORTED)
             set_target_properties(${PACKAGE_TARGET_NAME} PROPERTIES IMPORTED_LOCATION ${PACKAGE_OUTPUT_PATH} IMPORTED_IMPLIB ${PACKAGE_OUTPUT_PATH})
-            target_link_libraries(${PARSED_ARGS_DEPENDS} ${PACKAGE_TARGET_NAME})
+            foreach(DEPENDENCY ${PARSED_ARGS_DEPENDS})
+                target_link_libraries(${DEPENDENCY} ${PACKAGE_TARGET_NAME})
+            endforeach(DEPENDENCY)
             # http://www.mail-archive.com/cmake-commits@cmake.org/msg01135.html
             add_custom_target(
                 fake_foo_bar
