@@ -59,7 +59,7 @@ int main(int argc, char **argv)
         debug("udata_setAppData failed: %s\n", u_errorName(status));
         goto end;
     }
-#endif /* !URES_COMMON */
+#endif /* URES_COMMON */
 
     debug("loading locale: %s\n", NULL == locale ? "-" : locale);
     ures = ures_open(URES_STR, locale, &status);
