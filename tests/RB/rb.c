@@ -21,11 +21,11 @@
 #define STRINGIFY(x) #x
 #define STRINGIFY_EXPANDED(x) STRINGIFY(x)
 # define CONCAT(a, b) a ## b
-# define CONCAT_EXPANEDED(a, b) CONCAT(a, b)
+# define CONCAT_EXPANDED(a, b) CONCAT(a, b)
 
 #define URES_STR STRINGIFY_EXPANDED(URESNAME)
 #ifndef URES_COMMON
-# define URES_SYM CONCAT_EXPANEDED(URESNAME, _dat)
+# define URES_SYM CONCAT_EXPANDED(URESNAME, _dat)
 const void U_IMPORT *URES_SYM;
 #endif /* !URES_COMMON */
 
