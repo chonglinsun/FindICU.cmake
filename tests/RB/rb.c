@@ -26,7 +26,11 @@
 #define URES_STR STRINGIFY_EXPANDED(URESNAME)
 #ifndef URES_COMMON
 # define URES_SYM CONCAT_EXPANDED(URESNAME, _dat)
-const void U_IMPORT *URES_SYM;
+U_CFUNC const void
+# ifdef URES_SHARED
+U_IMPORT
+# endif /* URES_SHARED */
+*URES_SYM;
 #endif /* !URES_COMMON */
 
 #define debug(format, ...) \
