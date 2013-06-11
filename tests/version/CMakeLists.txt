@@ -41,21 +41,15 @@ function(icu_version_test _DIR)
             set(${ICU_PUBLIC_VAR_NS}_MINOR_VERSION "${CMAKE_MATCH_1}")
             set(${ICU_PUBLIC_VAR_NS}_PATCH_VERSION "0")
         elseif(${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS MATCHES ".*# *define *U_ICU_VERSION_MAJOR_NUM *([0-9]+).*")
-            #string(REGEX REPLACE ".*# *define *U_ICU_VERSION_MAJOR_NUM *([0-9]+).*" "\\1" ${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION "${${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS}")
-            set(${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION "${CMAKE_MATCH_1}")
             #
             # Since version 4.9.1, ICU release version numbering was totaly changed, see:
             # - http://site.icu-project.org/download/49
             # - http://userguide.icu-project.org/design#TOC-Version-Numbers-in-ICU
             #
-            if(${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION LESS 49)
-                string(REGEX REPLACE ".*# *define *U_ICU_VERSION_MINOR_NUM *([0-9]+).*" "\\1" ${ICU_PUBLIC_VAR_NS}_MINOR_VERSION "${${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS}")
-                string(REGEX REPLACE ".*# *define *U_ICU_VERSION_PATCHLEVEL_NUM *([0-9]+).*" "\\1" ${ICU_PUBLIC_VAR_NS}_PATCH_VERSION "${${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS}")
-            else(${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION LESS 49)
-                string(REGEX MATCH [0-9]$ ${ICU_PUBLIC_VAR_NS}_MINOR_VERSION "${${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION}")
-                string(REGEX REPLACE [0-9]$ "" ${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION "${${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION}")
-                string(REGEX REPLACE ".*# *define *U_ICU_VERSION_MINOR_NUM *([0-9]+).*" "\\1" ${ICU_PUBLIC_VAR_NS}_PATCH_VERSION "${${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS}")
-            endif(${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION LESS 49)
+            #string(REGEX REPLACE ".*# *define *U_ICU_VERSION_MAJOR_NUM *([0-9]+).*" "\\1" ${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION "${${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS}")
+            set(${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION "${CMAKE_MATCH_1}")
+            string(REGEX REPLACE ".*# *define *U_ICU_VERSION_MINOR_NUM *([0-9]+).*" "\\1" ${ICU_PUBLIC_VAR_NS}_MINOR_VERSION "${${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS}")
+            string(REGEX REPLACE ".*# *define *U_ICU_VERSION_PATCHLEVEL_NUM *([0-9]+).*" "\\1" ${ICU_PUBLIC_VAR_NS}_PATCH_VERSION "${${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS}")
         elseif(${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS MATCHES ".*# *define *U_ICU_VERSION *\"(([0-9]+)(\\.[0-9]+)*)\".*") # ICU [1.4;1.8[
             # [1.4;1.8[ as #define U_ICU_VERSION "1.4.1.2" but it seems that some 1.4.1(?:\.\d)? have releasing error and appears as 1.4.0
             #string(REGEX REPLACE ".*# *define *U_ICU_VERSION *\"([0-9]+)(\\.[0-9]+)*\".*" "\\1" ${ICU_PRIVATE_VAR_NS}_FULL_VERSION "${${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS}")
@@ -81,21 +75,23 @@ function(icu_version_test _DIR)
         OR NOT DEFINED ${ICU_PUBLIC_VAR_NS}_MINOR_VERSION
         OR NOT DEFINED ${ICU_PUBLIC_VAR_NS}_PATCH_VERSION
     )
-        message(FATAL_ERROR "unable to determine ICU version")
+        message("${_DIR} => unable to determine ICU version")
+    else()
+        if(EXISTS "${_DIR}/EXPECTED.txt")
+            file(STRINGS "${_DIR}/EXPECTED.txt" expected LIMIT_COUNT 1) # allow additionnal comment for documentation at end of file
+            if(${ICU_PUBLIC_VAR_NS}_VERSION VERSION_EQUAL expected)
+                message("${_DIR} => ${expected} (pass)")
+            else(${ICU_PUBLIC_VAR_NS}_VERSION VERSION_EQUAL expected)
+                message(FATAL_ERROR "test failed for ${_DIR}: get ${${ICU_PUBLIC_VAR_NS}_VERSION}, expect ${expected}")
+            endif(${ICU_PUBLIC_VAR_NS}_VERSION VERSION_EQUAL expected)
+        else(EXISTS "${_DIR}/EXPECTED.txt")
+            message("${_DIR} => ${${ICU_PUBLIC_VAR_NS}_VERSION} (default: please fill ${_DIR}/EXPECTED.txt)")
+        endif(EXISTS "${_DIR}/EXPECTED.txt")
     endif()
-    if(EXISTS "${_DIR}/EXPECTED.txt")
-        file(STRINGS "${_DIR}/EXPECTED.txt" expected LIMIT_COUNT 1) # allow additionnal comment for documentation at end of file
-        if(${ICU_PUBLIC_VAR_NS}_VERSION VERSION_EQUAL expected)
-            message("${_DIR} => ${expected} (pass)")
-        else(${ICU_PUBLIC_VAR_NS}_VERSION VERSION_EQUAL expected)
-            message(FATAL_ERROR "test failed for ${_DIR}: get ${${ICU_PUBLIC_VAR_NS}_VERSION}, expect ${expected}")
-        endif(${ICU_PUBLIC_VAR_NS}_VERSION VERSION_EQUAL expected)
-    else(EXISTS "${_DIR}/EXPECTED.txt")
-        message("${_DIR} => ${${ICU_PUBLIC_VAR_NS}_VERSION} (default: please fill ${_DIR}/EXPECTED.txt)")
-    endif(EXISTS "${_DIR}/EXPECTED.txt")
 endfunction(icu_version_test)
 
 file(GLOB directories RELATIVE ${PROJECT_SOURCE_DIR} "[0-9]*")
+list(SORT directories)
 foreach(d ${directories})
     icu_version_test("${d}")
 endforeach(d)

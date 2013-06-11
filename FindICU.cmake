@@ -40,7 +40,7 @@
 #   endif(ICU_FOUND)
 
 #=============================================================================
-# Copyright (c) 2011-2012, julp
+# Copyright (c) 2011-2013, julp
 #
 # Distributed under the OSI-approved BSD License
 #
@@ -51,9 +51,15 @@
 find_package(PkgConfig QUIET)
 
 ########## Private ##########
-set(ICU_PUBLIC_VAR_NS "ICU")                          # Prefix for all ICU relative public variables
-set(ICU_PRIVATE_VAR_NS "_${ICU_PUBLIC_VAR_NS}")       # Prefix for all ICU relative internal variables
-set(PC_ICU_PRIVATE_VAR_NS "_PC${ICU_PRIVATE_VAR_NS}") # Prefix for all pkg-config relative internal variables
+if(NOT DEFINED ICU_PUBLIC_VAR_NS)
+    set(ICU_PUBLIC_VAR_NS "ICU")                          # Prefix for all ICU relative public variables
+endif(NOT DEFINED ICU_PUBLIC_VAR_NS)
+if(NOT DEFINED ICU_PRIVATE_VAR_NS)
+    set(ICU_PRIVATE_VAR_NS "_${ICU_PUBLIC_VAR_NS}")       # Prefix for all ICU relative internal variables
+endif(NOT DEFINED ICU_PRIVATE_VAR_NS)
+if(NOT DEFINED PC_ICU_PRIVATE_VAR_NS)
+    set(PC_ICU_PRIVATE_VAR_NS "_PC${ICU_PRIVATE_VAR_NS}") # Prefix for all pkg-config relative internal variables
+endif(NOT DEFINED PC_ICU_PRIVATE_VAR_NS)
 
 function(icudebug _VARNAME)
     if(${ICU_PUBLIC_VAR_NS}_DEBUG)
@@ -153,20 +159,14 @@ if(${ICU_PUBLIC_VAR_NS}_INCLUDE_DIRS)
         set(${ICU_PUBLIC_VAR_NS}_MINOR_VERSION "${CMAKE_MATCH_1}")
         set(${ICU_PUBLIC_VAR_NS}_PATCH_VERSION "0")
     elseif(${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS MATCHES ".*# *define *U_ICU_VERSION_MAJOR_NUM *([0-9]+).*")
-        set(${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION "${CMAKE_MATCH_1}")
         #
         # Since version 4.9.1, ICU release version numbering was totaly changed, see:
         # - http://site.icu-project.org/download/49
         # - http://userguide.icu-project.org/design#TOC-Version-Numbers-in-ICU
         #
-        if(${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION LESS 49)
-            string(REGEX REPLACE ".*# *define *U_ICU_VERSION_MINOR_NUM *([0-9]+).*" "\\1" ${ICU_PUBLIC_VAR_NS}_MINOR_VERSION "${${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS}")
-            string(REGEX REPLACE ".*# *define *U_ICU_VERSION_PATCHLEVEL_NUM *([0-9]+).*" "\\1" ${ICU_PUBLIC_VAR_NS}_PATCH_VERSION "${${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS}")
-        else(${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION LESS 49)
-            string(REGEX MATCH [0-9]$ ${ICU_PUBLIC_VAR_NS}_MINOR_VERSION "${${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION}")
-            string(REGEX REPLACE [0-9]$ "" ${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION "${${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION}")
-            string(REGEX REPLACE ".*# *define *U_ICU_VERSION_MINOR_NUM *([0-9]+).*" "\\1" ${ICU_PUBLIC_VAR_NS}_PATCH_VERSION "${${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS}")
-        endif(${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION LESS 49)
+        set(${ICU_PUBLIC_VAR_NS}_MAJOR_VERSION "${CMAKE_MATCH_1}")
+        string(REGEX REPLACE ".*# *define *U_ICU_VERSION_MINOR_NUM *([0-9]+).*" "\\1" ${ICU_PUBLIC_VAR_NS}_MINOR_VERSION "${${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS}")
+        string(REGEX REPLACE ".*# *define *U_ICU_VERSION_PATCHLEVEL_NUM *([0-9]+).*" "\\1" ${ICU_PUBLIC_VAR_NS}_PATCH_VERSION "${${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS}")
     elseif(${ICU_PRIVATE_VAR_NS}_VERSION_HEADER_CONTENTS MATCHES ".*# *define *U_ICU_VERSION *\"(([0-9]+)(\\.[0-9]+)*)\".*") # ICU [1.4;1.8[
         # [1.4;1.8[ as #define U_ICU_VERSION "1.4.1.2" but it seems that some 1.4.1(?:\.\d)? have releasing error and appears as 1.4.0
         set(${ICU_PRIVATE_VAR_NS}_FULL_VERSION "${CMAKE_MATCH_1}") # copy CMAKE_MATCH_1, no longer valid on the following if
