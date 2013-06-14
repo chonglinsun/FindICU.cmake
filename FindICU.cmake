@@ -331,6 +331,25 @@ endif(NOT ${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE)
 #
 
 #
+# For an archive, the idea is to generate the following dependencies:
+#
+#   root.txt => root.rb \
+#                       |
+#   en.txt   => en.rb   | => pkglist.txt => application.dat
+#                       |
+#   fr.txt   => fr.rb   |
+#                       |
+#   and so on           /
+#
+# Lengend: 'A => B' means B depends on A
+#
+# Steps (correspond to arrows):
+#   1) genrb (from .txt to .rb)
+#   2) generate a file text (pkglist.txt) with all .rb files to put together
+#   3) build final archive (from *.rb/pkglist.txt to .dat)
+#
+
+#
 # TODO:
 # - default locale is "fr_FR", not "root" when running rb? => LANG seems to be in conflict with argv[1]? (./rb it = "fr.txt" but LANG=it_IT ./rb it = "root.txt")
 # - DEPENDS argument:
@@ -431,7 +450,11 @@ function(generate_icu_resource_bundle)
         # Target name to build intermediate list file
         set(PACKAGE_LIST_TARGET_NAME "${PACKAGE_TARGET_NAME}_LIST")
         # Directory (absolute) to set as "current directory" for genrb (does not include package directory, -p)
-        set(RESOURCE_GENRB_CHDIR_DIR "${CMAKE_PLATFORM_ROOT_BIN}/${PACKAGE_TARGET_NAME}.dir/")
+        if(DEFINED CMAKE_PLATFORM_ROOT_BIN) # CMake < 2.8.10
+            set(RESOURCE_GENRB_CHDIR_DIR "${CMAKE_PLATFORM_ROOT_BIN}/${PACKAGE_TARGET_NAME}.dir/")
+        else(DEFINED CMAKE_PLATFORM_ROOT_BIN) # CMake >= 2.8.10
+            set(RESOURCE_GENRB_CHDIR_DIR "${CMAKE_PLATFORM_INFO_DIR}/${PACKAGE_TARGET_NAME}.dir/")
+        endif(DEFINED CMAKE_PLATFORM_ROOT_BIN)
         # Directory (absolute) where resource bundles are built: concatenation of RESOURCE_GENRB_CHDIR_DIR and package name
         set(RESOURCE_OUTPUT_DIR "${RESOURCE_GENRB_CHDIR_DIR}/${PACKAGE_NAME_WE}/")
         # Output (relative) path for built package
