@@ -324,6 +324,7 @@ endif(NOT ${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE)
 #           + common or archive (default) : archive all ressource bundles into a single .dat file
 #           + library or dll              : assemble all ressource bundles into a separate and loadable library (.dll/.so)
 #           + static                      : integrate all ressource bundles to targets designed by DEPENDS parameter (as a static library)
+#       * NO_SHARED_FLAGS                 : only with TYPE in ['library', 'dll', 'static'], do not append ICU_C(XX)_SHARED_FLAGS to targets given as DEPENDS argument
 #   - JAVA:
 #       * BUNDLE <name> : required, prefix for generated classnames
 #   - XLIFF:
@@ -406,7 +407,7 @@ function(generate_icu_resource_bundle)
     cmake_parse_arguments(
         PARSED_ARGS # output variable name
         # options (true/false) (default value: false)
-        ""
+        "NO_SHARED_FLAGS"
         # univalued parameters (default value: "")
         "PACKAGE;DESTINATION;TYPE;FORMAT;BUNDLE"
         # multivalued parameters (default value: "")
@@ -585,6 +586,16 @@ function(generate_icu_resource_bundle)
             endif(MSVC)
             foreach(DEPENDENCY ${PARSED_ARGS_DEPENDS})
                 target_link_libraries(${DEPENDENCY} ${PACKAGE_TARGET_NAME})
+                if(NOT PARSED_ARGS_NO_SHARED_FLAGS)
+                    get_property(ENABLED_LANGUAGES GLOBAL PROPERTY ENABLED_LANGUAGES)
+                    message("ENABLED_LANGUAGES = ${ENABLED_LANGUAGES}")
+                    list(LENGTH "${ENABLED_LANGUAGES}" ENABLED_LANGUAGES_LENGTH)
+                    if(ENABLED_LANGUAGES_LENGTH GREATER 1)
+                        message(WARNING "Project has more than one language enabled, skip automatic shared flags appending")
+                    else(ENABLED_LANGUAGES_LENGTH GREATER 1)
+                        set_property(TARGET "${DEPENDENCY}" APPEND PROPERTY COMPILE_FLAGS "${${ICU_PUBLIC_VAR_NS}_${ENABLED_LANGUAGES}_SHARED_FLAGS}")
+                    endif(ENABLED_LANGUAGES_LENGTH GREATER 1)
+                endif(NOT PARSED_ARGS_NO_SHARED_FLAGS)
             endforeach(DEPENDENCY)
             # http://www.mail-archive.com/cmake-commits@cmake.org/msg01135.html
             add_custom_target(
