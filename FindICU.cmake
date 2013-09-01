@@ -344,9 +344,9 @@ endif(NOT ${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE)
 # Lengend: 'A => B' means B depends on A
 #
 # Steps (correspond to arrows):
-#   1) genrb (from .txt to .rb)
-#   2) generate a file text (pkglist.txt) with all .rb files to put together
-#   3) build final archive (from *.rb/pkglist.txt to .dat)
+#   1) genrb (from .txt to .res)
+#   2) generate a file text (pkglist.txt) with all .res files to put together
+#   3) build final archive (from *.res/pkglist.txt to .dat)
 #
 
 #
