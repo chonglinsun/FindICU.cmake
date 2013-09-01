@@ -333,13 +333,13 @@ endif(NOT ${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE)
 #
 # For an archive, the idea is to generate the following dependencies:
 #
-#   root.txt => root.rb \
-#                       |
-#   en.txt   => en.rb   | => pkglist.txt => application.dat
-#                       |
-#   fr.txt   => fr.rb   |
-#                       |
-#   and so on           /
+#   root.txt => root.res \
+#                        |
+#   en.txt   => en.res   |
+#                        | => pkglist.txt => application.dat
+#   fr.txt   => fr.res   |
+#                        |
+#   and so on            /
 #
 # Lengend: 'A => B' means B depends on A
 #
@@ -351,11 +351,11 @@ endif(NOT ${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE)
 
 #
 # TODO:
-# - default locale is "fr_FR", not "root" when running rb? => LANG seems to be in conflict with argv[1]? (./rb it = "fr.txt" but LANG=it_IT ./rb it = "root.txt")
+# - [for note: nothing to do] default locale is fallback on LANG environment variable not "root" except if you force it (LANG="" ./rb it)
 # - DEPENDS argument:
 #     + ALL as default value
 #     + modify add_custom_target (s/ALL/${PARSED_ARGS_DEPENDS} || ALL/)
-#     + assert ${PARSED_ARGS_DEPENDS} != "" if ${PARSED_ARGS_PACKAGE} != "" and ${PKGDATA_LIBRARY_${TYPE}_TYPE} != ""
+#     + [done?] assert ${PARSED_ARGS_DEPENDS} != "" if ${PARSED_ARGS_PACKAGE} != "" and ${PKGDATA_LIBRARY_${TYPE}_TYPE} != ""
 # - return (via an output variable) all final generated files BEFORE installation?
 # - let the user name its target (add an argument to generate_icu_resource_bundle)?
 # - genrb (add_custom_command), when ${PARSED_ARGS_PACKAGE} == "", chdir to resource bundle source's directory
@@ -365,6 +365,10 @@ endif(NOT ${ICU_PUBLIC_VAR_NS}_PKGDATA_EXECUTABLE)
 # - cleanup
 
 function(generate_icu_resource_bundle)
+
+    ##### <constants> #####
+    set(__FUNCTION__ "generate_icu_resource_bundle")
+    ##### </constants> #####
 
     ##### <hash constants> #####
     # filename extension of built resource bundle (without dot)
@@ -413,32 +417,32 @@ function(generate_icu_resource_bundle)
     # assert(length(PARSED_ARGS_FILES) > 0)
     list(LENGTH PARSED_ARGS_FILES PARSED_ARGS_FILES_LEN)
     if(PARSED_ARGS_FILES_LEN LESS 1)
-        message(FATAL_ERROR "generate_icu_resource_bundle() expects at least 1 resource bundle as FILES argument, 0 given")
+        message(FATAL_ERROR "${__FUNCTION__}() expects at least 1 resource bundle as FILES argument, 0 given")
     endif(PARSED_ARGS_FILES_LEN LESS 1)
 
     string(TOUPPER "${PARSED_ARGS_FORMAT}" UPPER_FORMAT)
     # assert(${UPPER_FORMAT} in ['', 'java', 'xlif'])
     if(NOT DEFINED BUNDLES_${UPPER_FORMAT}_SUFFIX)
-        message(FATAL_ERROR "generate_icu_resource_bundle(): unknown FORMAT '${PARSED_ARGS_FORMAT}'")
+        message(FATAL_ERROR "${__FUNCTION__}(): unknown FORMAT '${PARSED_ARGS_FORMAT}'")
     endif(NOT DEFINED BUNDLES_${UPPER_FORMAT}_SUFFIX)
 
     if(UPPER_FORMAT STREQUAL "JAVA")
         # assert(${PARSED_ARGS_BUNDLE} != "")
         if(NOT PARSED_ARGS_BUNDLE)
-            message(FATAL_ERROR "generate_icu_resource_bundle(): java bundle name expected, BUNDLE parameter missing")
+            message(FATAL_ERROR "${__FUNCTION__}(): java bundle name expected, BUNDLE parameter missing")
         endif(NOT PARSED_ARGS_BUNDLE)
     endif(UPPER_FORMAT STREQUAL "JAVA")
 
     if(PARSED_ARGS_PACKAGE)
         # assert(${PARSED_ARGS_FORMAT} == "")
         if(PARSED_ARGS_FORMAT)
-            message(FATAL_ERROR "generate_icu_resource_bundle(): packaging is only supported for binary format, not xlif neither java outputs")
+            message(FATAL_ERROR "${__FUNCTION__}(): packaging is only supported for binary format, not xlif neither java outputs")
         endif(PARSED_ARGS_FORMAT)
 
         string(TOUPPER "${PARSED_ARGS_TYPE}" UPPER_MODE)
         # assert(${UPPER_MODE} in ['', 'common', 'archive', 'dll', library'])
         if(NOT DEFINED PKGDATA_${UPPER_MODE}_ALIAS)
-            message(FATAL_ERROR "generate_icu_resource_bundle(): unknown TYPE '${PARSED_ARGS_TYPE}'")
+            message(FATAL_ERROR "${__FUNCTION__}(): unknown TYPE '${PARSED_ARGS_TYPE}'")
         else(NOT DEFINED PKGDATA_${UPPER_MODE}_ALIAS)
             set(TYPE "${PKGDATA_${UPPER_MODE}_ALIAS}")
         endif(NOT DEFINED PKGDATA_${UPPER_MODE}_ALIAS)
@@ -568,7 +572,10 @@ function(generate_icu_resource_bundle)
             VERBATIM
         )
         if(PKGDATA_LIBRARY_${TYPE}_TYPE)
-            # TODO: assert(${PARSED_ARGS_DEPENDS} != "")
+            # assert(${PARSED_ARGS_DEPENDS} != "")
+            if(NOT PARSED_ARGS_DEPENDS)
+                message(FATAL_ERROR "${__FUNCTION__}(): static and library mode imply a list of targets to link to, DEPENDS parameter missing")
+            endif(NOT PARSED_ARGS_DEPENDS)
             add_library(${PACKAGE_TARGET_NAME} ${PKGDATA_LIBRARY_${TYPE}_TYPE} IMPORTED)
             if(MSVC)
                 string(REGEX REPLACE "${PKGDATA_LIBRARY_SUFFIX}\$" "${CMAKE_IMPORT_LIBRARY_SUFFIX}" PACKAGE_OUTPUT_LIB "${PACKAGE_OUTPUT_PATH}")
